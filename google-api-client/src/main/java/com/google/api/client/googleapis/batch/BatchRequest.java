@@ -27,12 +27,15 @@ import com.google.api.client.http.HttpUnsuccessfulResponseHandler;
 import com.google.api.client.http.MultipartContent;
 import com.google.api.client.util.Preconditions;
 import com.google.api.client.util.Sleeper;
+import com.google.common.io.ByteStreams;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.zip.GZIPInputStream;
+import java.io.ByteArrayInputStream;
 
 /**
  * An instance of this class represents a single batch of requests.
@@ -262,8 +265,17 @@ public final class BatchRequest {
 
         // Parse the content stream.
         InputStream contentStream = response.getContent();
+
+        // If the response stream is gzipped, unzip the entire blob upfront. Reading
+        // GZIPInputStream byte by byte is really slow.
+        InputStream stream = contentStream;
+        if (contentStream instanceof GZIPInputStream) {
+          byte[] gzipBytes = ByteStreams.toByteArray(contentStream);
+          stream = new ByteArrayInputStream(gzipBytes, 0, gzipBytes.length);
+        }
+
         batchResponse =
-            new BatchUnparsedResponse(contentStream, boundary, requestInfos, retryAllowed);
+            new BatchUnparsedResponse(stream, boundary, requestInfos, retryAllowed);
 
         while (batchResponse.hasNext) {
           batchResponse.parseNextResponse();
